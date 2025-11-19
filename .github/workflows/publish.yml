@@ -1,0 +1,52 @@
+name: Upload Python Package to PyPI when a Release is Published
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  pypi-publish:
+    name: Publish release to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/CB2325NumericaG3
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flit toml
+
+      - name: Update version from tag
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Detected version: $TAG_VERSION"
+
+          python - <<EOF
+          import toml
+          import pathlib
+
+          pyproject = pathlib.Path("pyproject.toml")
+          data = toml.load(pyproject)
+          data["project"]["version"] = "$TAG_VERSION"
+          data["project"].pop("dynamic", None)
+          pyproject.write_text(toml.dumps(data))
+          print("✅ pyproject.toml updated to version", "$TAG_VERSION")
+          EOF
+
+      - name: Build package
+        run: |
+          rm -rf dist build *.egg-info
+          flit build
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
